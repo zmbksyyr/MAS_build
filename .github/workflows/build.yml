@@ -1,143 +1,30 @@
 name: Build MAS Release
-
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version"
+        description: Release version
         required: false
-        default: "MAS"
-
+        default: MAS
 permissions:
   contents: write
-
 jobs:
   build:
-
     runs-on: windows-latest
-
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
-
-
-      - name: Setup .NET
+      - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.x"
-
-
-      - name: Prepare
+          dotnet-version: 8.x
+      - name: Build
         shell: pwsh
-        run: |
-          $date = Get-Date -Format "yyyyMMdd-HHmmss"
-          echo "BUILD_DATE=$date" >> $env:GITHUB_ENV
-
-
-      - name: Clone MAS
-        shell: pwsh
-        run: |
-          git clone https://github.com/massgravel/Microsoft-Activation-Scripts.git MAS
-
-
-      - name: Clone TSforge
-        shell: pwsh
-        run: |
-          git clone https://github.com/massgravel/TSforge.git TSforge
-
-
-      - name: Build TSforge
-        shell: pwsh
-        run: |
-          dotnet build TSforge -c Release
-
-
-      - name: Copy DLL
-        shell: pwsh
-        run: |
-
-          $dll = Get-ChildItem `
-            -Path TSforge `
-            -Filter LibTSforge.dll `
-            -Recurse |
-            Select-Object -First 1
-
-          if ($null -eq $dll) {
-            throw "LibTSforge.dll not found"
-          }
-
-          Copy-Item `
-            $dll.FullName `
-            "MAS\MAS\Separate-Files-Version\Activators\" `
-            -Force
-
-
-      - name: Generate build info
-        shell: pwsh
-        run: |
-
-          $mas = git -C MAS rev-parse HEAD
-          $ts = git -C TSforge rev-parse HEAD
-
-
-          @(
-            "MAS Build Information"
-            ""
-            "Date:"
-            "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-            ""
-            "MAS Commit:"
-            "$mas"
-            ""
-            "TSforge Commit:"
-            "$ts"
-            ""
-            ".NET:"
-            "$(dotnet --version)"
-          ) | Out-File BUILDINFO.txt -Encoding utf8
-
-
-      - name: Package release
-        shell: pwsh
-        run: |
-
-          Compress-Archive `
-            -Path MAS\MAS\* `
-            -DestinationPath MAS-release.zip
-
-
-      - name: Package sources
-        shell: pwsh
-        run: |
-
-          Compress-Archive `
-            -Path MAS `
-            -DestinationPath MAS-source.zip
-
-
-          Compress-Archive `
-            -Path TSforge `
-            -DestinationPath TSforge-source.zip
-
-
-      - name: SHA256
-        shell: pwsh
-        run: |
-
-          Get-FileHash *.zip -Algorithm SHA256 |
-            Out-File SHA256SUMS.txt
-
-
+        run: ./scripts/build.ps1
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ github.event.inputs.version }}-${{ env.BUILD_DATE }}-${{ github.run_number }}"
-          name: "${{ github.event.inputs.version }} Build ${{ env.BUILD_DATE }}"
+          tag_name: "${{ github.event.inputs.version }}-${{ github.run_number }}"
+          name: "${{ github.event.inputs.version }} Build ${{ github.run_number }}"
           body_path: BUILDINFO.txt
-          files: |
-            MAS-release.zip
-            MAS-source.zip
-            TSforge-source.zip
-            SHA256SUMS.txt
-            BUILDINFO.txt
+          files: MAS-release.zip
